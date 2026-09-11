@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const GET = async () => {
   try {
     await connect();
-    let users = await User.find().sort({ createdAt: 1 });
+    let users = await User.find().sort({ createdAt: 1 }).lean();
 
     if (!users || users.length === 0) {
       console.log("Seeding MongoDB Atlas users collection...");
@@ -23,10 +23,16 @@ export const GET = async () => {
         avatar: p.avatar || ""
       }));
       await User.insertMany(formatted);
-      users = await User.find().sort({ createdAt: 1 });
+      users = await User.find().sort({ createdAt: 1 }).lean();
     }
 
-    return Response.json(users, { status: 200 });
+    const formattedUsers = users.map((u) => ({
+      ...u,
+      id: u.userId || u._id.toString(),
+      _id: u._id.toString()
+    }));
+
+    return Response.json(formattedUsers, { status: 200 });
   } catch (error) {
     console.error("GET /api/users error:", error);
     return Response.json({ error: error.message }, { status: 500 });

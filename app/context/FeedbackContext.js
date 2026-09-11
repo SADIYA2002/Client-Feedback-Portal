@@ -6,9 +6,9 @@ import { feedbackStorage, SAMPLE_FEEDBACKS, PRESET_PROFILES } from "../services/
 const FeedbackContext = createContext(null);
 
 export const FeedbackProvider = ({ children }) => {
-  const [feedbacks, setFeedbacks] = useState([]);
+  const [feedbacks, setFeedbacks] = useState(SAMPLE_FEEDBACKS);
   const [userVotes, setUserVotes] = useState({});
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(true);
 
   // Users list (loaded dynamically from MongoDB Atlas & local custom additions)
   const [availableUsers, setAvailableUsers] = useState(PRESET_PROFILES);
@@ -42,9 +42,9 @@ export const FeedbackProvider = ({ children }) => {
   // Fetch feedbacks from MongoDB Atlas
   const loadFeedbacksFromAtlas = useCallback(async () => {
     const data = await feedbackStorage.getFeedbacks();
-    setFeedbacks(data);
-    const loadedVotes = feedbackStorage.getUserVotes();
-    setUserVotes(loadedVotes);
+    if (Array.isArray(data) && data.length > 0) {
+      setFeedbacks(data);
+    }
   }, []);
 
   // Fetch users from MongoDB Atlas
@@ -55,18 +55,27 @@ export const FeedbackProvider = ({ children }) => {
     }
   }, []);
 
-  // Initial client load
+  // Sync active votes whenever feedbacks or currentUser changes
   useEffect(() => {
-    const init = async () => {
-      const storedUser = feedbackStorage.getCurrentUser();
-      if (storedUser) {
-        setCurrentUser(storedUser);
-        setUserRole(storedUser.role === "Product Team" ? "staff" : "client");
-      }
-      await Promise.all([loadFeedbacksFromAtlas(), loadUsers()]);
-      setIsLoaded(true);
-    };
-    init();
+    if (currentUser) {
+      const currentId = currentUser.id || currentUser.userId;
+      const votes = feedbackStorage.getUserVotes(feedbacks, currentId);
+      setUserVotes(votes);
+    } else {
+      setUserVotes({});
+    }
+  }, [feedbacks, currentUser]);
+
+  // Initial client load - Instant rendering with background Atlas sync
+  useEffect(() => {
+    const storedUser = feedbackStorage.getCurrentUser();
+    if (storedUser) {
+      setCurrentUser(storedUser);
+      setUserRole(storedUser.role === "Product Team" ? "staff" : "client");
+    }
+    // Background async sync with MongoDB Atlas
+    loadUsers();
+    loadFeedbacksFromAtlas();
   }, [loadFeedbacksFromAtlas, loadUsers]);
 
   // Login handler with support for saving custom users
@@ -182,10 +191,9 @@ export const FeedbackProvider = ({ children }) => {
     const created = await feedbackStorage.addFeedback(payload);
     if (created) {
       setFeedbacks((prev) => [created, ...prev]);
-      setUserVotes(feedbackStorage.getUserVotes());
       showToast("Feedback stored in MongoDB Atlas successfully!", "success");
     } else {
-      showToast("Saved locally (offline mode)", "info");
+      showToast("Could not save to MongoDB Atlas", "error");
     }
     return created;
   };
@@ -215,7 +223,7 @@ export const FeedbackProvider = ({ children }) => {
   };
 
   const handleToggleUpvote = async (id) => {
-    const userId = currentUser ? currentUser.id : "guest-user";
+    const userId = currentUser ? (currentUser.id || currentUser.userId) : "guest-user";
     const userName = currentUser ? currentUser.name : "Guest Client";
     const result = await feedbackStorage.toggleUpvote(id, userId, userName);
 
@@ -224,21 +232,28 @@ export const FeedbackProvider = ({ children }) => {
         prev.map((fb) => ((fb.id === id || fb._id === id) ? result.feedback : fb))
       );
     } else {
-      // Fallback local toggle
-      const hasVoted = Boolean(userVotes[id]);
+      // Optimistic local toggle
       setFeedbacks((prev) =>
         prev.map((fb) => {
           if (fb.id === id || fb._id === id) {
-            return { ...fb, votes: Math.max(0, (fb.votes || 0) + (hasVoted ? -1 : 1)) };
+            const upvotedBy = Array.isArray(fb.upvotedBy) ? [...fb.upvotedBy] : [];
+            const idx = upvotedBy.indexOf(userId);
+            let votes = fb.votes || 0;
+            if (idx > -1) {
+              upvotedBy.splice(idx, 1);
+              votes = Math.max(0, votes - 1);
+            } else {
+              upvotedBy.push(userId);
+              votes += 1;
+            }
+            return { ...fb, votes, upvotedBy };
           }
           return fb;
         })
       );
-      feedbackStorage.recordUserVote(id, !hasVoted);
     }
 
-    setUserVotes(feedbackStorage.getUserVotes());
-    if (result.hasVoted) {
+    if (result?.hasVoted) {
       showToast("Vote recorded in MongoDB Atlas!", "success");
     } else {
       showToast("Vote removed in MongoDB Atlas.", "info");

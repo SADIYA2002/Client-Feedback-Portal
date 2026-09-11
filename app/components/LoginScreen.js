@@ -238,7 +238,7 @@ export default function LoginScreen() {
           <div className="bg-slate-50 px-4 py-2 border-t border-slate-200 flex items-center justify-between text-[10px] text-slate-500">
             <span className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              Encrypted Local Session
+              Synced with MongoDB Atlas
             </span>
             <span>SOC2 Type II Standard</span>
           </div>

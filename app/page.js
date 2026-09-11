@@ -33,17 +33,8 @@ export default function Home() {
     setSelectedPriority
   } = useFeedback();
 
-  if (!isLoaded) {
-    return (
-      <div className="py-20 flex flex-col items-center justify-center space-y-4">
-        <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-sm font-semibold text-slate-500">Initializing Enterprise Portal...</p>
-      </div>
-    );
-  }
-
-  // FIRST SCREEN: If user is not logged in, show the User Selection / Login Screen
-  if (!isAuthenticated || !currentUser) {
+  // FIRST SCREEN: If user is not logged in, show the User Selection / Login Screen immediately
+  if (!currentUser) {
     return <LoginScreen />;
   }
 

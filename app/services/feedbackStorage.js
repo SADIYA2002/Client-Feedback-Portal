@@ -1,7 +1,18 @@
-const STORAGE_KEY = "business_client_feedback_system_v1";
-const USER_VOTES_KEY = "business_client_feedback_user_votes_v1";
-const CURRENT_USER_KEY = "business_client_feedback_current_user_v1";
-const CUSTOM_USERS_KEY = "business_client_feedback_custom_users_v1";
+// Purge any legacy data from localStorage so all data stays in MongoDB Atlas
+if (typeof window !== "undefined") {
+  try {
+    localStorage.removeItem("business_client_feedback_system_v1");
+    localStorage.removeItem("business_client_feedback_user_votes_v1");
+    localStorage.removeItem("business_client_feedback_current_user_v1");
+    localStorage.removeItem("business_client_feedback_custom_users_v1");
+    localStorage.removeItem("feedback_system_items");
+    localStorage.removeItem("feedback_system_user_votes");
+    localStorage.removeItem("feedback_system_current_user");
+    localStorage.removeItem("feedback_system_custom_users");
+  } catch (e) {}
+}
+
+const SESSION_USER_KEY = "portal_active_session_user";
 
 export const SAMPLE_FEEDBACKS = [
   {
@@ -209,14 +220,14 @@ export const PRESET_PROFILES = [
 ];
 
 export const feedbackStorage = {
-  isAvailable() {
-    return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+  isSessionAvailable() {
+    return typeof window !== "undefined" && typeof window.sessionStorage !== "undefined";
   },
 
   getCurrentUser() {
-    if (!this.isAvailable()) return null;
+    if (!this.isSessionAvailable()) return null;
     try {
-      const data = localStorage.getItem(CURRENT_USER_KEY);
+      const data = sessionStorage.getItem(SESSION_USER_KEY);
       return data ? JSON.parse(data) : null;
     } catch (e) {
       return null;
@@ -224,50 +235,38 @@ export const feedbackStorage = {
   },
 
   setCurrentUser(user) {
-    if (!this.isAvailable()) return;
+    if (!this.isSessionAvailable()) return;
     try {
       if (user) {
-        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+        sessionStorage.setItem(SESSION_USER_KEY, JSON.stringify(user));
       } else {
-        localStorage.removeItem(CURRENT_USER_KEY);
+        sessionStorage.removeItem(SESSION_USER_KEY);
       }
     } catch (e) {
-      console.error("Failed to save current user to localStorage", e);
+      console.error("Failed to save session user", e);
     }
   },
 
   clearCurrentUser() {
-    if (!this.isAvailable()) return;
+    if (!this.isSessionAvailable()) return;
     try {
-      localStorage.removeItem(CURRENT_USER_KEY);
+      sessionStorage.removeItem(SESSION_USER_KEY);
     } catch (e) {
-      console.error("Failed to clear current user", e);
+      console.error("Failed to clear session user", e);
     }
   },
 
-  getUserVotes() {
-    if (!this.isAvailable()) return {};
-    try {
-      const data = localStorage.getItem(USER_VOTES_KEY);
-      return data ? JSON.parse(data) : { "fb-101": true, "fb-103": true };
-    } catch (e) {
-      return {};
-    }
-  },
-
-  recordUserVote(feedbackId, voted) {
-    if (!this.isAvailable()) return;
-    try {
-      const votes = this.getUserVotes();
-      if (voted) {
-        votes[feedbackId] = true;
-      } else {
-        delete votes[feedbackId];
+  // Derive user votes directly from MongoDB Atlas feedbacks array
+  getUserVotes(feedbacks = [], currentUserId = null) {
+    if (!currentUserId || !Array.isArray(feedbacks)) return {};
+    const votes = {};
+    for (const fb of feedbacks) {
+      const id = fb.id || fb._id;
+      if (Array.isArray(fb.upvotedBy) && fb.upvotedBy.includes(currentUserId)) {
+        votes[id] = true;
       }
-      localStorage.setItem(USER_VOTES_KEY, JSON.stringify(votes));
-    } catch (e) {
-      console.error("Failed to record vote", e);
     }
+    return votes;
   },
 
   // Read all from MongoDB Atlas via Next.js API
@@ -277,22 +276,11 @@ export const feedbackStorage = {
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
-          if (this.isAvailable()) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-          }
           return data;
         }
       }
     } catch (e) {
-      console.warn("Could not fetch from MongoDB Atlas directly, using cache/sample", e);
-    }
-
-    // Fallback to localStorage or sample data if offline
-    if (this.isAvailable()) {
-      try {
-        const cached = localStorage.getItem(STORAGE_KEY);
-        if (cached) return JSON.parse(cached);
-      } catch (err) {}
+      console.warn("Could not fetch from MongoDB Atlas directly, using baseline", e);
     }
     return SAMPLE_FEEDBACKS;
   },
@@ -307,7 +295,6 @@ export const feedbackStorage = {
       });
       if (res.ok) {
         const created = await res.json();
-        this.recordUserVote(created.id || created._id, true);
         return created;
       }
     } catch (e) {
@@ -346,43 +333,24 @@ export const feedbackStorage = {
     }
   },
 
-  // Get users from MongoDB Atlas, merged with local custom profiles
+  // Get users directly from MongoDB Atlas
   async getUsers() {
-    let localCustom = [];
-    if (this.isAvailable()) {
-      try {
-        localCustom = JSON.parse(localStorage.getItem(CUSTOM_USERS_KEY) || "[]");
-      } catch (e) {}
-    }
-
     try {
       const res = await fetch("/api/users", { cache: "no-store" });
       if (res.ok) {
         const users = await res.json();
         if (Array.isArray(users) && users.length > 0) {
-          const userIds = new Set(users.map((u) => u.id || u.userId));
-          const toAdd = localCustom.filter((u) => !userIds.has(u.id || u.userId));
-          return [...users, ...toAdd];
+          return users;
         }
       }
     } catch (e) {
-      console.warn("Could not fetch users from MongoDB Atlas, using cache/preset", e);
+      console.warn("Could not fetch users from MongoDB Atlas, using preset profiles", e);
     }
-
-    const presetIds = new Set(PRESET_PROFILES.map((p) => p.id));
-    return [...PRESET_PROFILES, ...localCustom.filter((u) => !presetIds.has(u.id || u.userId))];
+    return PRESET_PROFILES;
   },
 
-  // Save new user profile to MongoDB Atlas and cache locally
+  // Save new user profile directly to MongoDB Atlas users collection
   async addUser(user) {
-    if (this.isAvailable()) {
-      try {
-        const localCustom = JSON.parse(localStorage.getItem(CUSTOM_USERS_KEY) || "[]");
-        const filtered = localCustom.filter((u) => (u.id || u.userId) !== (user.id || user.userId));
-        localStorage.setItem(CUSTOM_USERS_KEY, JSON.stringify([...filtered, user]));
-      } catch (e) {}
-    }
-
     try {
       const res = await fetch("/api/users", {
         method: "POST",
@@ -393,7 +361,7 @@ export const feedbackStorage = {
         return await res.json();
       }
     } catch (e) {
-      console.warn("Could not persist user to MongoDB Atlas, stored in local cache", e);
+      console.error("Failed to save user to MongoDB Atlas", e);
     }
     return user;
   },
@@ -432,9 +400,7 @@ export const feedbackStorage = {
         body: JSON.stringify({ userId, userName })
       });
       if (res.ok) {
-        const result = await res.json();
-        this.recordUserVote(id, result.hasVoted);
-        return result;
+        return await res.json();
       }
     } catch (e) {
       console.error("Failed to vote in MongoDB Atlas", e);

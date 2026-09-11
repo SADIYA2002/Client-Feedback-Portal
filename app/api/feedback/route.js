@@ -8,16 +8,22 @@ export const dynamic = "force-dynamic";
 export const GET = async () => {
   try {
     await connect();
-    let feedbacks = await Feedback.find().sort({ createdAt: -1 });
+    let feedbacks = await Feedback.find().sort({ createdAt: -1 }).lean();
 
     // If Atlas database is empty, seed with initial realistic business baseline
     if (!feedbacks || feedbacks.length === 0) {
       console.log("Seeding MongoDB Atlas with initial enterprise feedback data...");
       await Feedback.insertMany(SAMPLE_FEEDBACKS);
-      feedbacks = await Feedback.find().sort({ createdAt: -1 });
+      feedbacks = await Feedback.find().sort({ createdAt: -1 }).lean();
     }
 
-    return Response.json(feedbacks, { status: 200 });
+    const formatted = feedbacks.map((fb) => ({
+      ...fb,
+      id: fb.id || fb._id.toString(),
+      _id: fb._id.toString()
+    }));
+
+    return Response.json(formatted, { status: 200 });
   } catch (error) {
     console.error("GET /api/feedback error:", error);
     return Response.json({ error: error.message }, { status: 500 });

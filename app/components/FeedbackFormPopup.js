@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState } from "react";
 import { useFeedback } from "../context/FeedbackContext";
@@ -41,7 +41,7 @@ export default function FeedbackFormPopup({ onClose }) {
     if (!files.length) return;
 
     files.forEach((file) => {
-      // Limit file size to 2MB for localStorage safety
+      // Limit file size to 2MB for safe upload
       if (file.size > 2 * 1024 * 1024) {
         alert(`File ${file.name} exceeds 2MB limit for local storage.`);
         return;
@@ -256,7 +256,7 @@ export default function FeedbackFormPopup({ onClose }) {
                   className="hidden"
                 />
               </label>
-              <span className="text-xs text-slate-400">Stored directly in browser LocalStorage</span>
+              <span className="text-xs text-slate-400">Synced directly with MongoDB Atlas Database</span>
             </div>
 
             {/* Uploaded attachments preview */}
