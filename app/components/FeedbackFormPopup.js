@@ -76,24 +76,28 @@ export default function FeedbackFormPopup({ onClose }) {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
 
     setIsSubmitting(true);
-    addFeedback({
-      title: title.trim(),
-      description: description.trim(),
-      category,
-      priority,
-      clientName: clientName.trim(),
-      clientCompany: clientCompany.trim(),
-      clientEmail: clientEmail.trim(),
-      attachments
-    });
-
-    setIsSubmitting(false);
-    onClose();
+    try {
+      await addFeedback({
+        title: title.trim(),
+        description: description.trim(),
+        category,
+        priority,
+        clientName: clientName.trim(),
+        clientCompany: clientCompany.trim(),
+        clientEmail: clientEmail.trim(),
+        attachments
+      });
+      onClose();
+    } catch (err) {
+      console.error("Error submitting feedback:", err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

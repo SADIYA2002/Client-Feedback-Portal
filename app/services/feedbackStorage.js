@@ -296,6 +296,9 @@ export const feedbackStorage = {
       if (res.ok) {
         const created = await res.json();
         return created;
+      } else {
+        const errText = await res.text();
+        console.error("Failed to post feedback to MongoDB Atlas, server returned:", res.status, errText);
       }
     } catch (e) {
       console.error("Failed to post feedback to MongoDB Atlas", e);
