@@ -1,6 +1,7 @@
 import { MongoClient } from "mongodb";
 
-const uri = process.env.MONGO_URL || process.env.MONGODB_URI || "";
+const fallbackUri = "mongodb+srv://smulla44447_db_user:Magna%40786@cluster0.nx1yqot.mongodb.net/feedback-system?retryWrites=true&w=majority&appName=Cluster0";
+const uri = process.env.MONGO_URL || process.env.MONGODB_URI || fallbackUri;
 const options = {};
 
 let client;

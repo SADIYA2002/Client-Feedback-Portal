@@ -5,15 +5,14 @@ if (!cached) {
   cached = global.mongoose = { conn: null, promise: null };
 }
 
+const defaultUri = "mongodb+srv://smulla44447_db_user:Magna%40786@cluster0.nx1yqot.mongodb.net/feedback-system?retryWrites=true&w=majority&appName=Cluster0";
+
 export const connect = async () => {
   if (cached.conn && mongoose.connection.readyState >= 1) {
     return cached.conn;
   }
 
-  if (!process.env.MONGO_URL) {
-    console.warn("MongoDB warning: MONGO_URL is not configured.");
-    return null;
-  }
+  const mongoUrl = process.env.MONGO_URL || defaultUri;
 
   if (!cached.promise) {
     const opts = {
@@ -22,7 +21,7 @@ export const connect = async () => {
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
     };
-    cached.promise = mongoose.connect(process.env.MONGO_URL, opts).then((m) => {
+    cached.promise = mongoose.connect(mongoUrl, opts).then((m) => {
       console.log("MongoDB connected successfully");
       return m;
     });
