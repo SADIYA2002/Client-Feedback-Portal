@@ -99,7 +99,7 @@ export default function Home() {
                 No matching client feedback found
               </h3>
               <p className="text-sm text-slate-500 max-w-md mx-auto mb-6">
-                We couldn't find any feedback matching your current filters or search criteria. Try adjusting your search query or reset the filters.
+                We couldn&apos;t find any feedback matching your current filters or search criteria. Try adjusting your search query or reset the filters.
               </p>
               <div className="flex items-center justify-center gap-3">
                 <button
